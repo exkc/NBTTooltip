@@ -1,35 +1,41 @@
 package zabi.minecraft.nbttooltip;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.lwjgl.glfw.GLFW;
-
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.item.TooltipContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.resource.language.I18n;
 import net.minecraft.client.toast.SystemToast;
 import net.minecraft.client.toast.SystemToast.Type;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.component.ComponentChanges;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.registry.RegistryOps;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import org.lwjgl.glfw.GLFW;
 import zabi.minecraft.nbttooltip.config.ModConfig;
 import zabi.minecraft.nbttooltip.parse_engine.NbtTagParser;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class NBTTooltip implements ClientModInitializer {
 
 	public static int ticks = 0;
 	public static int line_scrolled = 0;
 
-	public static final String FORMAT = Formatting.ITALIC.toString()+Formatting.DARK_GRAY;
+	public static final String FORMAT = Formatting.ITALIC.toString() + Formatting.DARK_GRAY;
 
 	public static final int WAITTIME_BEFORE_FAST_SCROLL = 10;
 
@@ -40,13 +46,13 @@ public class NBTTooltip implements ClientModInitializer {
 
 	public static boolean flipflop_key_copy = false;
 	public static boolean flipflop_key_toggle = false;
-	
+
 	public static boolean nbtKeyToggled = false;
 	public static boolean nbtKeyPressed = false;
 
 	public static int fast_scroll_warmup = 0;
 	public static int autoscroll_locks = 0;
-	
+
 	@Override
 	public void onInitializeClient() {
 		ModConfig.init();
@@ -59,25 +65,25 @@ public class NBTTooltip implements ClientModInitializer {
 	}
 
 	public static void clientTick(MinecraftClient mc) {
-		
+
 		if (mc.world == null) return;
-		
+
 		if (autoscroll_locks > 0) autoscroll_locks--;
-		
+
 		if (!Screen.hasShiftDown() && !isPressed(mc, SCROLL_DOWN) && !isPressed(mc, SCROLL_UP) && autoscroll_locks == 0) {
 			NBTTooltip.ticks++;
 			int factor = 1;
 			if (Screen.hasAltDown()) {
 				factor = 4;
 			}
-			if (NBTTooltip.ticks >= ModConfig.INSTANCE.ticksBeforeScroll/factor) {
+			if (NBTTooltip.ticks >= ModConfig.INSTANCE.ticksBeforeScroll / factor) {
 				NBTTooltip.ticks = 0;
 				if (ModConfig.INSTANCE.ticksBeforeScroll > 0) {
 					NBTTooltip.line_scrolled++;
 				}
 			}
 		}
-		
+
 		if (isPressed(mc, TOGGLE_NBT)) {
 			if (!flipflop_key_toggle) {
 				nbtKeyToggled = !nbtKeyToggled;
@@ -119,8 +125,8 @@ public class NBTTooltip implements ClientModInitializer {
 		if (ModConfig.INSTANCE.showSeparator) {
 			newttip.add(Text.literal("- NBTTooltip -"));
 		}
-		if (ttip.size()>lines) {
-			if (lines+line_scrolled>ttip.size()) {
+		if (ttip.size() > lines) {
+			if (lines + line_scrolled > ttip.size()) {
 				if (isPressed(MinecraftClient.getInstance(), SCROLL_DOWN)) {
 					line_scrolled = ttip.size() - lines;
 				} else {
@@ -128,7 +134,7 @@ public class NBTTooltip implements ClientModInitializer {
 				}
 			}
 			for (int i = 0; i < lines; i++) {
-				newttip.add(ttip.get(i+line_scrolled));
+				newttip.add(ttip.get(i + line_scrolled));
 			}
 		} else {
 			line_scrolled = 0;
@@ -137,9 +143,9 @@ public class NBTTooltip implements ClientModInitializer {
 		return newttip;
 	}
 
-	public static void onInjectTooltip(ItemStack stack, TooltipContext context, List<Text> list) {
+	public static void onInjectTooltip(ItemStack stack, Item.TooltipContext context, TooltipType type, List<Text> list) {
 		handleClipboardCopy(stack);
-		if (ModConfig.INSTANCE.triggerType.shouldShowTooltip(context)) {
+		if (ModConfig.INSTANCE.triggerType.shouldShowTooltip(context, type)) {
 			if (autoscroll_locks > 0) autoscroll_locks = 2;
 			int lines = ModConfig.INSTANCE.maxLinesShown;
 			if (ModConfig.INSTANCE.ctrlSuppressesRest && Screen.hasControlDown()) {
@@ -148,26 +154,37 @@ public class NBTTooltip implements ClientModInitializer {
 			} else {
 				list.add(Text.literal(""));
 			}
-			NbtCompound tag = stack.getNbt();
+
 			ArrayList<Text> ttip = new ArrayList<>(lines);
-			if (tag!=null && !tag.isEmpty()) {
+			NbtCompound tag = encodeStack(stack, context.getRegistryLookup().getOps(NbtOps.INSTANCE));
+			if (!tag.isEmpty()) {
 				if (ModConfig.INSTANCE.showDelimiters) {
-					ttip.add(Text.literal(Formatting.DARK_PURPLE+" - nbt start -"));
+					ttip.add(Text.literal(Formatting.DARK_PURPLE + " - nbt start -"));
 				}
 				if (ModConfig.INSTANCE.compress) {
-					ttip.add(Text.literal(FORMAT+ tag));
+					ttip.add(Text.literal(FORMAT + tag));
 				} else {
 					getRenderingEngine().parseTagToList(ttip, tag, ModConfig.INSTANCE.splitLongLines);
 				}
 				if (ModConfig.INSTANCE.showDelimiters) {
-					ttip.add(Text.literal(Formatting.DARK_PURPLE+" - nbt end -"));
+					ttip.add(Text.literal(Formatting.DARK_PURPLE + " - nbt end -"));
 				}
 				ttip = NBTTooltip.transformTtip(ttip, lines);
 				list.addAll(ttip);
 			} else {
-				list.add(Text.literal(FORMAT+"No NBT data"));
+				list.add(Text.literal(FORMAT + "No NBT data"));
 			}
 		}
+	}
+
+	private static NbtCompound encodeStack(ItemStack stack, DynamicOps<NbtElement> ops) {
+		DataResult<NbtElement> result = ComponentChanges.CODEC.encodeStart(ops, stack.getComponentChanges());
+		result.ifError(e->{
+
+		});
+		NbtElement nbtElement = result.getOrThrow();
+		// cast here, as soon as this breaks, the mod will need to update anyway
+		return (NbtCompound) nbtElement;
 	}
 
 	private static void handleClipboardCopy(ItemStack stack) {
@@ -188,7 +205,7 @@ public class NBTTooltip implements ClientModInitializer {
 		StringBuilder sb = new StringBuilder();
 		String name = I18n.translate(stack.getTranslationKey());
 		ArrayList<Text> nbtData = new ArrayList<>();
-		getCopyingEngine().parseTagToList(nbtData, stack.getNbt(), false);
+		getCopyingEngine().parseTagToList(nbtData, encodeStack(stack, mc.player.getRegistryManager().getOps(NbtOps.INSTANCE)), false);
 		nbtData.forEach(t -> {
 			sb.append(t.getString().replaceAll("§[0-9a-gk-or]", ""));
 			sb.append("\n");
@@ -201,11 +218,11 @@ public class NBTTooltip implements ClientModInitializer {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private static NbtTagParser getRenderingEngine() {
 		return ModConfig.INSTANCE.tooltipEngine.getEngine();
 	}
-	
+
 	private static NbtTagParser getCopyingEngine() {
 		return ModConfig.INSTANCE.copyingEngine.getEngine();
 	}

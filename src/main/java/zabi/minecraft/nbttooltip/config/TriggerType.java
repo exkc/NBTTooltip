@@ -1,25 +1,26 @@
 package zabi.minecraft.nbttooltip.config;
 
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
-import net.minecraft.client.item.TooltipContext;
+import net.minecraft.item.Item;
+import net.minecraft.item.tooltip.TooltipType;
 import zabi.minecraft.nbttooltip.NBTTooltip;
 
 public enum TriggerType {
 
-	F3H(TooltipContext::isAdvanced),
-	ALWAYS_ON(ctx -> true),
-	TOGGLE_ON_KEY(ctx -> NBTTooltip.nbtKeyToggled),
-	SHOW_ON_KEY(ctx -> NBTTooltip.nbtKeyPressed);
+	F3H((ctx, type) -> type.isAdvanced()),
+	ALWAYS_ON((ctx, type) -> true),
+	TOGGLE_ON_KEY((ctx, type) -> NBTTooltip.nbtKeyToggled),
+	SHOW_ON_KEY((ctx, type) -> NBTTooltip.nbtKeyPressed);
 
-	private Function<TooltipContext, Boolean> test;
+	private BiFunction<Item.TooltipContext, TooltipType, Boolean> test;
 
-	TriggerType(Function<TooltipContext, Boolean> check) {
+	TriggerType(BiFunction<Item.TooltipContext, TooltipType, Boolean> check) {
 		this.test = check;
 	}
 
-	public boolean shouldShowTooltip(TooltipContext context) {
-		return this.test.apply(context);
+	public boolean shouldShowTooltip(Item.TooltipContext context, TooltipType type) {
+		return this.test.apply(context, type);
 	}
 
 }
