@@ -1,7 +1,13 @@
 package zabi.minecraft.nbttooltip;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.lwjgl.glfw.GLFW;
+
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
+
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
@@ -20,15 +26,10 @@ import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.registry.RegistryOps;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import org.lwjgl.glfw.GLFW;
 import zabi.minecraft.nbttooltip.config.ModConfig;
 import zabi.minecraft.nbttooltip.parse_engine.NbtTagParser;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class NBTTooltip implements ClientModInitializer {
 
